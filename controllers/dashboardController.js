@@ -8,9 +8,9 @@ exports.getStats = async (req, res) => {
     try {
         const { rt } = req.query;
 
-        // 1. Total Jamaah
+        // 1. Total Jamaah (from family_members table)
         const [jamaahCount] = await db.query(
-            'SELECT COUNT(*) as total FROM jamaah'
+            'SELECT COUNT(*) as total FROM family_members'
         );
 
         // 2. Get current month's date range
@@ -50,35 +50,37 @@ exports.getStats = async (req, res) => {
              FROM kas_masjid`
         );
 
-        // 6. Chart: Distribusi Jamaah per RT
+        // 6. Chart: Distribusi Jamaah per RT (from family_members via families)
         let chartQuery;
         let queryParams = [];
 
         if (rt && rt !== 'All') {
             // If specific RT is selected
             chartQuery = `
-                SELECT rt as label, COUNT(*)::bigint as value
-                FROM jamaah
-                WHERE rt = ?
-                GROUP BY rt
-                ORDER BY rt ASC
+                SELECT f.rt as label, COUNT(fm.id)::bigint as value
+                FROM family_members fm
+                JOIN families f ON fm.family_id = f.id
+                WHERE f.rt = ?
+                GROUP BY f.rt
+                ORDER BY f.rt ASC
             `;
             queryParams = [rt];
         } else {
             // Show all RT distribution
             chartQuery = `
-                SELECT rt as label, COUNT(*)::bigint as value
-                FROM jamaah
-                GROUP BY rt
-                ORDER BY rt ASC
+                SELECT f.rt as label, COUNT(fm.id)::bigint as value
+                FROM family_members fm
+                JOIN families f ON fm.family_id = f.id
+                GROUP BY f.rt
+                ORDER BY f.rt ASC
             `;
         }
 
         const [chartData] = await db.query(chartQuery, queryParams);
 
-        // 7. Get list of all RT for filter
+        // 7. Get list of all RT for filter (from families)
         const [rtList] = await db.query(
-            'SELECT DISTINCT rt FROM jamaah ORDER BY rt ASC'
+            'SELECT DISTINCT rt FROM families ORDER BY rt ASC'
         );
 
         // Send response

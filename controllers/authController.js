@@ -73,6 +73,75 @@ exports.login = async (req, res) => {
 };
 
 /**
+ * Register endpoint for Jamaah
+ * POST /api/v1/auth/register
+ */
+exports.register = async (req, res) => {
+    const { username, password, full_name, no_hp } = req.body;
+
+    // Validation
+    if (!username || !password || !full_name) {
+        return res.status(400).json({
+            success: false,
+            message: 'Username, password, dan nama lengkap harus diisi'
+        });
+    }
+
+    if (username.length < 4) {
+        return res.status(400).json({
+            success: false,
+            message: 'Username minimal 4 karakter'
+        });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({
+            success: false,
+            message: 'Password minimal 6 karakter'
+        });
+    }
+
+    try {
+        // Check if username already exists
+        const [existingUsers] = await db.query(
+            'SELECT id FROM users WHERE username = ?',
+            [username]
+        );
+
+        if (existingUsers.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: 'Username sudah digunakan'
+            });
+        }
+
+        // Insert new user with role 'jamaah'
+        const [result] = await db.query(
+            'INSERT INTO users (username, password, full_name, role, rt) VALUES (?, ?, ?, ?, ?)',
+            [username, password, full_name, 'jamaah', no_hp || null]
+        );
+
+        // Log registration to audit
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES (?, ?)',
+            [result.insertId || 0, `Register: ${username} (jamaah)`]
+        );
+
+        res.status(201).json({
+            success: true,
+            message: 'Pendaftaran berhasil! Silakan login dengan akun Anda.'
+        });
+
+    } catch (err) {
+        console.error('Register error:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan pada server'
+        });
+    }
+};
+
+/**
  * Logout endpoint
  * POST /api/v1/auth/logout
  */

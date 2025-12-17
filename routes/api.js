@@ -16,6 +16,7 @@ const { requireAdmin, requireAdminOrJamaah } = require('../middleware/authMiddle
 
 // ===== Authentication Routes (Public) =====
 router.post('/auth/login', authController.login);
+router.post('/auth/register', authController.register);
 router.post('/auth/logout', authController.logout);
 
 // ===== Dashboard Routes (Admin & Jamaah) =====

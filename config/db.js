@@ -4,23 +4,41 @@ require('dotenv').config();
 // Database configuration for PostgreSQL/Supabase
 let pool;
 
-// Support DATABASE_URL (Supabase/Render format) or individual config
-if (process.env.DATABASE_URL) {
+// Get DATABASE_URL and validate it
+const databaseUrl = process.env.DATABASE_URL;
+
+// Check if DATABASE_URL is properly set and starts with valid prefix
+if (databaseUrl && databaseUrl.startsWith('postgresql://')) {
+    console.log('📦 Using DATABASE_URL for connection');
     pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: databaseUrl,
         ssl: {
             rejectUnauthorized: false
         }
     });
-} else {
+} else if (databaseUrl && databaseUrl.startsWith('postgres://')) {
+    console.log('📦 Using DATABASE_URL for connection');
     pool = new Pool({
-        host: process.env.DB_HOST || 'localhost',
+        connectionString: databaseUrl,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+} else if (process.env.DB_HOST) {
+    console.log('📦 Using individual DB config (DB_HOST, DB_USER, etc.)');
+    pool = new Pool({
+        host: process.env.DB_HOST,
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || '',
         database: process.env.DB_NAME || 'halodkm',
-        port: process.env.DB_PORT || 5432,
+        port: parseInt(process.env.DB_PORT) || 5432,
         ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
     });
+} else {
+    console.error('❌ ERROR: No database configuration found!');
+    console.error('Please set DATABASE_URL or individual DB_* environment variables');
+    console.error('Example DATABASE_URL: postgresql://user:password@host:5432/database');
+    process.exit(1);
 }
 
 // Test database connection

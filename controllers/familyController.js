@@ -113,7 +113,7 @@ exports.getFamilyMembers = async (req, res) => {
  * POST /api/v1/families
  */
 exports.createFamily = async (req, res) => {
-    const { no_kk, kepala_keluarga, rt, alamat, no_hp, user_id } = req.body;
+    const { no_kk, kepala_keluarga, rt, alamat, no_hp, nik_kepala, jenis_kelamin_kepala, tanggal_lahir_kepala, user_id } = req.body;
 
     // Validation
     if (!no_kk || !kepala_keluarga || !rt) {
@@ -123,10 +123,27 @@ exports.createFamily = async (req, res) => {
         });
     }
 
+    // NIK kepala keluarga wajib untuk auto-add ke family_members
+    if (!nik_kepala || !jenis_kelamin_kepala) {
+        return res.status(400).json({
+            success: false,
+            message: 'NIK dan jenis kelamin kepala keluarga harus diisi'
+        });
+    }
+
     try {
+        // 1. Insert family
         const [result] = await db.query(
             'INSERT INTO families (no_kk, kepala_keluarga, rt, alamat, no_hp) VALUES (?, ?, ?, ?, ?)',
             [no_kk, kepala_keluarga, rt, alamat || null, no_hp || null]
+        );
+
+        const familyId = result.insertId;
+
+        // 2. Auto-add kepala keluarga as family member
+        await db.query(
+            'INSERT INTO family_members (family_id, nik, nama, hubungan, jenis_kelamin, tanggal_lahir) VALUES (?, ?, ?, ?, ?, ?)',
+            [familyId, nik_kepala, kepala_keluarga, 'Kepala Keluarga', jenis_kelamin_kepala, tanggal_lahir_kepala || null]
         );
 
         // Log activity
@@ -137,7 +154,7 @@ exports.createFamily = async (req, res) => {
         res.json({
             success: true,
             message: 'Data keluarga berhasil ditambahkan',
-            data: { id: result.insertId }
+            data: { id: familyId }
         });
 
     } catch (error) {
@@ -146,7 +163,7 @@ exports.createFamily = async (req, res) => {
         if (error.code === '23505') {
             return res.status(400).json({
                 success: false,
-                message: 'No KK sudah terdaftar!'
+                message: 'No KK atau NIK sudah terdaftar!'
             });
         }
 

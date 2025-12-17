@@ -1,0 +1,21 @@
+# Render Blueprint for HaloDKM Backend
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: halodkm-backend
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: FRONTEND_URL
+        sync: false  # Set manually after Vercel deployment

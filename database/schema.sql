@@ -251,4 +251,97 @@ INSERT INTO family_members (family_id, nik, nama, hubungan, jenis_kelamin, tangg
 (10, '3201013030300038', 'Nadia Putri', 'Istri', 'Perempuan', '1984-12-28')
 ON CONFLICT (nik) DO NOTHING;
 
+-- ===== 8. Penduduk Khusus Table =====
+-- Stores non-permanent residents (kontrak, pedagang, warga dusun lain)
+CREATE TABLE IF NOT EXISTS penduduk_khusus (
+    id SERIAL PRIMARY KEY,
+    nik VARCHAR(16) NOT NULL UNIQUE,
+    nama VARCHAR(100) NOT NULL,
+    jenis_kelamin VARCHAR(20) NOT NULL CHECK (jenis_kelamin IN ('Laki-laki', 'Perempuan')),
+    alamat TEXT NULL,
+    no_hp VARCHAR(15) NULL,
+    label VARCHAR(50) NOT NULL CHECK (label IN ('kontrak', 'pedagang', 'warga_dusun_lain')),
+    keterangan TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pk_nik ON penduduk_khusus(nik);
+CREATE INDEX IF NOT EXISTS idx_pk_label ON penduduk_khusus(label);
+CREATE INDEX IF NOT EXISTS idx_pk_nama ON penduduk_khusus(nama);
+
+CREATE OR REPLACE TRIGGER update_penduduk_khusus_updated_at
+    BEFORE UPDATE ON penduduk_khusus
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ===== 9. Events Table =====
+-- Stores event information for event-based financial tracking
+-- tipe: 'penggalangan_dana' = financial only, 'distribusi' = financial + recipients
+CREATE TABLE IF NOT EXISTS events (
+    id SERIAL PRIMARY KEY,
+    nama VARCHAR(200) NOT NULL,
+    deskripsi TEXT NULL,
+    tipe VARCHAR(30) NOT NULL DEFAULT 'penggalangan_dana' CHECK (tipe IN ('penggalangan_dana', 'distribusi')),
+    tanggal_mulai DATE NOT NULL,
+    tanggal_selesai DATE NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'aktif' CHECK (status IN ('aktif', 'selesai')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
+CREATE INDEX IF NOT EXISTS idx_events_tanggal ON events(tanggal_mulai);
+
+CREATE OR REPLACE TRIGGER update_events_updated_at
+    BEFORE UPDATE ON events
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ===== 10. Event Kas Table =====
+-- Stores event-specific financial transactions
+CREATE TABLE IF NOT EXISTS event_kas (
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    type VARCHAR(20) NOT NULL CHECK (type IN ('masuk', 'keluar')),
+    amount DECIMAL(15, 2) NOT NULL,
+    description TEXT NOT NULL,
+    tanggal DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_kas_event_id ON event_kas(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_kas_type ON event_kas(type);
+CREATE INDEX IF NOT EXISTS idx_event_kas_tanggal ON event_kas(tanggal);
+
+CREATE OR REPLACE TRIGGER update_event_kas_updated_at
+    BEFORE UPDATE ON event_kas
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ===== 11. Event Recipients Table =====
+-- Stores recipients/beneficiaries of events (e.g., zakat fitrah recipients, qurban meat recipients)
+CREATE TABLE IF NOT EXISTS event_recipients (
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    nama VARCHAR(100) NOT NULL,
+    alamat TEXT NULL,
+    no_hp VARCHAR(15) NULL,
+    jenis_bantuan VARCHAR(100) NULL,
+    jumlah VARCHAR(50) NULL,
+    keterangan TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_recipients_event_id ON event_recipients(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_recipients_nama ON event_recipients(nama);
+
+CREATE OR REPLACE TRIGGER update_event_recipients_updated_at
+    BEFORE UPDATE ON event_recipients
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- ===== End of Schema =====
+

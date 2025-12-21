@@ -10,6 +10,8 @@ const infoController = require('../controllers/infoController');
 const userController = require('../controllers/userController');
 const auditController = require('../controllers/auditController');
 const familyController = require('../controllers/familyController');
+const pendudukKhususController = require('../controllers/pendudukKhususController');
+const eventController = require('../controllers/eventController');
 
 // Import auth middleware
 const { requireAdmin, requireAdminOrJamaah } = require('../middleware/authMiddleware');
@@ -60,4 +62,29 @@ router.post('/families/:id/members', requireAdmin, familyController.addFamilyMem
 router.put('/families/:id/members/:memberId', requireAdmin, familyController.updateFamilyMember);
 router.delete('/families/:id/members/:memberId', requireAdmin, familyController.deleteFamilyMember);
 
+// ===== Penduduk Khusus Routes (Admin Only) =====
+router.get('/penduduk-khusus', requireAdmin, pendudukKhususController.getAllPendudukKhusus);
+router.get('/penduduk-khusus/:id', requireAdmin, pendudukKhususController.getPendudukKhusus);
+router.post('/penduduk-khusus', requireAdmin, pendudukKhususController.createPendudukKhusus);
+router.put('/penduduk-khusus/:id', requireAdmin, pendudukKhususController.updatePendudukKhusus);
+router.delete('/penduduk-khusus/:id', requireAdmin, pendudukKhususController.deletePendudukKhusus);
+
+// ===== Event Routes (Admin Only) =====
+router.get('/events', requireAdmin, eventController.getAllEvents);
+router.get('/events/:id', requireAdmin, eventController.getEvent);
+router.post('/events', requireAdmin, eventController.createEvent);
+router.put('/events/:id', requireAdmin, eventController.updateEvent);
+router.delete('/events/:id', requireAdmin, eventController.deleteEvent);
+router.post('/events/:id/complete', requireAdmin, eventController.completeEvent);
+router.post('/events/:id/transactions', requireAdmin, eventController.createEventTransaction);
+router.put('/events/:id/transactions/:transId', requireAdmin, eventController.updateEventTransaction);
+router.delete('/events/:id/transactions/:transId', requireAdmin, eventController.deleteEventTransaction);
+
+// Event Recipients Routes (Admin Only)
+router.get('/events/:id/recipients', requireAdmin, eventController.getEventRecipients);
+router.post('/events/:id/recipients', requireAdmin, eventController.createEventRecipient);
+router.put('/events/:id/recipients/:recipientId', requireAdmin, eventController.updateEventRecipient);
+router.delete('/events/:id/recipients/:recipientId', requireAdmin, eventController.deleteEventRecipient);
+
 module.exports = router;
+

@@ -18,10 +18,10 @@ exports.getAllPendudukKhusus = async (req, res) => {
 
         query += ' ORDER BY nama ASC';
 
-        const result = await db.query(query, params);
+        const [rows] = await db.query(query, params);
 
         // Get counts per label
-        const countResult = await db.query(`
+        const [countRows] = await db.query(`
             SELECT 
                 label,
                 COUNT(*) as count
@@ -35,15 +35,15 @@ exports.getAllPendudukKhusus = async (req, res) => {
             warga_dusun_lain: 0
         };
 
-        countResult.rows.forEach(row => {
+        countRows.forEach(row => {
             labelCounts[row.label] = parseInt(row.count);
         });
 
         res.json({
             success: true,
             data: {
-                data: result.rows,
-                total: result.rows.length,
+                data: rows,
+                total: rows.length,
                 labelCounts
             }
         });
@@ -64,9 +64,9 @@ exports.getAllPendudukKhusus = async (req, res) => {
 exports.getPendudukKhusus = async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await db.query('SELECT * FROM penduduk_khusus WHERE id = $1', [id]);
+        const [rows] = await db.query('SELECT * FROM penduduk_khusus WHERE id = $1', [id]);
 
-        if (result.rows.length === 0) {
+        if (rows.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Penduduk khusus tidak ditemukan'
@@ -75,7 +75,7 @@ exports.getPendudukKhusus = async (req, res) => {
 
         res.json({
             success: true,
-            data: result.rows[0]
+            data: rows[0]
         });
 
     } catch (error) {
@@ -110,7 +110,7 @@ exports.createPendudukKhusus = async (req, res) => {
     }
 
     try {
-        const result = await db.query(
+        const [rows] = await db.query(
             `INSERT INTO penduduk_khusus (nik, nama, jenis_kelamin, alamat, no_hp, label, keterangan) 
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
             [nik, nama, jenis_kelamin, alamat || null, no_hp || null, label, keterangan || null]
@@ -126,7 +126,7 @@ exports.createPendudukKhusus = async (req, res) => {
         res.json({
             success: true,
             message: 'Penduduk khusus berhasil ditambahkan',
-            data: { id: result.rows[0].id }
+            data: { id: rows[0].id }
         });
 
     } catch (error) {
@@ -168,7 +168,7 @@ exports.updatePendudukKhusus = async (req, res) => {
     }
 
     try {
-        const result = await db.query(
+        const [rows, result] = await db.query(
             `UPDATE penduduk_khusus 
              SET nik = $1, nama = $2, jenis_kelamin = $3, alamat = $4, no_hp = $5, label = $6, keterangan = $7
              WHERE id = $8`,
@@ -218,9 +218,9 @@ exports.deletePendudukKhusus = async (req, res) => {
 
     try {
         // Get info before delete
-        const existing = await db.query('SELECT * FROM penduduk_khusus WHERE id = $1', [id]);
+        const [existing] = await db.query('SELECT * FROM penduduk_khusus WHERE id = $1', [id]);
 
-        const result = await db.query('DELETE FROM penduduk_khusus WHERE id = $1', [id]);
+        const [rows, result] = await db.query('DELETE FROM penduduk_khusus WHERE id = $1', [id]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({
@@ -231,7 +231,7 @@ exports.deletePendudukKhusus = async (req, res) => {
 
         // Log to audit
         const userInfo = req.userInfo || {};
-        const info = existing.rows[0] ? existing.rows[0].nama : `ID ${id}`;
+        const info = existing[0] ? existing[0].nama : `ID ${id}`;
         await db.query(
             'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
             [userInfo.id || 1, `Menghapus penduduk khusus: ${info}`]

@@ -714,3 +714,233 @@ exports.deleteEventRecipient = async (req, res) => {
         });
     }
 };
+
+// ==================== PANITIA MANAGEMENT ====================
+
+/**
+ * Get all panitia for an event
+ * GET /api/v1/events/:id/panitia
+ */
+exports.getEventPanitia = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const [rows] = await db.query(
+            'SELECT * FROM event_panitia WHERE event_id = $1 ORDER BY CASE role WHEN \'Ketua\' THEN 1 WHEN \'Sekretaris\' THEN 2 WHEN \'Bendahara\' THEN 3 ELSE 4 END, nama ASC',
+            [id]
+        );
+
+        res.json({
+            success: true,
+            data: rows,
+            total: rows.length
+        });
+
+    } catch (error) {
+        console.error('Get event panitia error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Create event panitia
+ * POST /api/v1/events/:id/panitia
+ */
+exports.createEventPanitia = async (req, res) => {
+    const { id } = req.params;
+    const { source_type, source_id, nama, role, no_hp } = req.body;
+
+    if (!nama || !role) {
+        return res.status(400).json({
+            success: false,
+            message: 'Nama dan role panitia harus diisi'
+        });
+    }
+
+    try {
+        // Check if event exists
+        const [eventRows] = await db.query('SELECT * FROM events WHERE id = $1', [id]);
+
+        if (eventRows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event tidak ditemukan'
+            });
+        }
+
+        const [rows] = await db.query(
+            `INSERT INTO event_panitia (event_id, source_type, source_id, nama, role, no_hp) 
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [id, source_type || 'manual', source_id || null, nama, role, no_hp || null]
+        );
+
+        // Log to audit
+        const userInfo = req.userInfo || {};
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [userInfo.id || 1, `Menambah panitia "${nama}" (${role}) ke event ${eventRows[0].nama}`]
+        );
+
+        res.json({
+            success: true,
+            message: 'Panitia berhasil ditambahkan',
+            data: { id: rows[0].id }
+        });
+
+    } catch (error) {
+        console.error('Create event panitia error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Update event panitia
+ * PUT /api/v1/events/:id/panitia/:panitiaId
+ */
+exports.updateEventPanitia = async (req, res) => {
+    const { id, panitiaId } = req.params;
+    const { nama, role, no_hp } = req.body;
+
+    if (!nama || !role) {
+        return res.status(400).json({
+            success: false,
+            message: 'Nama dan role panitia harus diisi'
+        });
+    }
+
+    try {
+        const [rows, result] = await db.query(
+            `UPDATE event_panitia 
+             SET nama = $1, role = $2, no_hp = $3
+             WHERE id = $4 AND event_id = $5`,
+            [nama, role, no_hp || null, panitiaId, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Panitia tidak ditemukan'
+            });
+        }
+
+        // Log to audit
+        const userInfo = req.userInfo || {};
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [userInfo.id || 1, `Mengupdate panitia ID ${panitiaId}`]
+        );
+
+        res.json({
+            success: true,
+            message: 'Panitia berhasil diperbarui'
+        });
+
+    } catch (error) {
+        console.error('Update event panitia error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Delete event panitia
+ * DELETE /api/v1/events/:id/panitia/:panitiaId
+ */
+exports.deleteEventPanitia = async (req, res) => {
+    const { id, panitiaId } = req.params;
+
+    try {
+        const [rows, result] = await db.query(
+            'DELETE FROM event_panitia WHERE id = $1 AND event_id = $2',
+            [panitiaId, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Panitia tidak ditemukan'
+            });
+        }
+
+        // Log to audit
+        const userInfo = req.userInfo || {};
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [userInfo.id || 1, `Menghapus panitia ID ${panitiaId}`]
+        );
+
+        res.json({
+            success: true,
+            message: 'Panitia berhasil dihapus'
+        });
+
+    } catch (error) {
+        console.error('Delete event panitia error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Search penduduk (tetap + khusus) for panitia selector
+ * GET /api/v1/penduduk/search?q=keyword
+ */
+exports.searchPenduduk = async (req, res) => {
+    const { q } = req.query;
+
+    if (!q || q.length < 2) {
+        return res.json({
+            success: true,
+            data: []
+        });
+    }
+
+    try {
+        const searchTerm = `%${q}%`;
+
+        // Search from family_members (penduduk tetap)
+        const [tetapRows] = await db.query(
+            `SELECT fm.id, fm.nama, fm.nik, f.no_hp, 'penduduk_tetap' as source_type
+             FROM family_members fm
+             LEFT JOIN families f ON fm.family_id = f.id
+             WHERE fm.nama ILIKE $1 
+             ORDER BY fm.nama ASC
+             LIMIT 10`,
+            [searchTerm]
+        );
+
+        // Search from penduduk_khusus
+        const [khususRows] = await db.query(
+            `SELECT id, nama, nik, no_hp, 'penduduk_khusus' as source_type
+             FROM penduduk_khusus
+             WHERE nama ILIKE $1
+             ORDER BY nama ASC
+             LIMIT 10`,
+            [searchTerm]
+        );
+
+        const combined = [...tetapRows, ...khususRows].slice(0, 15);
+
+        res.json({
+            success: true,
+            data: combined
+        });
+
+    } catch (error) {
+        console.error('Search penduduk error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

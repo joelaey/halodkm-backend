@@ -86,5 +86,14 @@ router.post('/events/:id/recipients', requireAdmin, eventController.createEventR
 router.put('/events/:id/recipients/:recipientId', requireAdmin, eventController.updateEventRecipient);
 router.delete('/events/:id/recipients/:recipientId', requireAdmin, eventController.deleteEventRecipient);
 
+// Event Panitia Routes (Admin Only)
+router.get('/events/:id/panitia', requireAdmin, eventController.getEventPanitia);
+router.post('/events/:id/panitia', requireAdmin, eventController.createEventPanitia);
+router.put('/events/:id/panitia/:panitiaId', requireAdmin, eventController.updateEventPanitia);
+router.delete('/events/:id/panitia/:panitiaId', requireAdmin, eventController.deleteEventPanitia);
+
+// Penduduk Search (for panitia selector)
+router.get('/penduduk/search', requireAdmin, eventController.searchPenduduk);
+
 module.exports = router;
 

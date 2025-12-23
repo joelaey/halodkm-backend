@@ -343,5 +343,28 @@ CREATE OR REPLACE TRIGGER update_event_recipients_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- ===== 12. Event Panitia Table =====
+-- Stores event committee members with roles
+-- source_type: 'penduduk_tetap' (from family_members) or 'penduduk_khusus' or 'manual'
+CREATE TABLE IF NOT EXISTS event_panitia (
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    source_type VARCHAR(30) NOT NULL DEFAULT 'manual' CHECK (source_type IN ('penduduk_tetap', 'penduduk_khusus', 'manual')),
+    source_id INT NULL,
+    nama VARCHAR(100) NOT NULL,
+    role VARCHAR(100) NOT NULL DEFAULT 'Anggota',
+    no_hp VARCHAR(15) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_panitia_event_id ON event_panitia(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_panitia_role ON event_panitia(role);
+
+CREATE OR REPLACE TRIGGER update_event_panitia_updated_at
+    BEFORE UPDATE ON event_panitia
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- ===== End of Schema =====
 

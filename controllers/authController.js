@@ -1,4 +1,7 @@
 const db = require('../config/db');
+const bcrypt = require('bcryptjs');
+
+const SALT_ROUNDS = 10;
 
 /**
  * Login endpoint
@@ -7,7 +10,6 @@ const db = require('../config/db');
 exports.login = async (req, res) => {
     const { username, password } = req.body;
 
-    // Validation
     if (!username || !password) {
         return res.status(400).json({
             success: false,
@@ -16,13 +18,11 @@ exports.login = async (req, res) => {
     }
 
     try {
-        // Query user from database
         const [users] = await db.query(
-            'SELECT * FROM users WHERE username = ?',
+            'SELECT * FROM users WHERE username = $1',
             [username]
         );
 
-        // Check if user exists
         if (users.length === 0) {
             return res.status(401).json({
                 success: false,
@@ -32,35 +32,47 @@ exports.login = async (req, res) => {
 
         const user = users[0];
 
-        // Simple password check (in production, use bcrypt!)
-        if (user.password !== password) {
+        // Check password with bcrypt
+        // First check if password is hashed (starts with $2) or plain text
+        let isValidPassword = false;
+        if (user.password.startsWith('$2')) {
+            isValidPassword = await bcrypt.compare(password, user.password);
+        } else {
+            // Legacy plain text password - check match and hash it
+            isValidPassword = (user.password === password);
+            if (isValidPassword) {
+                // Upgrade to hashed password
+                const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+                await db.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, user.id]);
+            }
+        }
+
+        if (!isValidPassword) {
             return res.status(401).json({
                 success: false,
                 message: 'Password salah'
             });
         }
 
-        // Success response - include token and user at root level for frontend
         const userData = {
             id: user.id,
             username: user.username,
             role: user.role,
             full_name: user.full_name,
-            rt: user.rt // For RT-level access control
+            rt: user.rt
         };
 
-        // Log login to audit
         await db.query(
-            'INSERT INTO audit_logs (user_id, action) VALUES (?, ?)',
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
             [user.id, `Login: ${user.username} (${user.role})`]
         );
 
         res.json({
             success: true,
             message: 'Login berhasil',
-            token: `token-${user.id}-${Date.now()}`, // Simple token for now
+            token: `token-${user.id}-${Date.now()}`,
             user: userData,
-            data: userData // Keep for backwards compatibility
+            data: userData
         });
 
     } catch (err) {
@@ -79,7 +91,6 @@ exports.login = async (req, res) => {
 exports.register = async (req, res) => {
     const { username, password, full_name, no_hp } = req.body;
 
-    // Validation
     if (!username || !password || !full_name) {
         return res.status(400).json({
             success: false,
@@ -102,9 +113,8 @@ exports.register = async (req, res) => {
     }
 
     try {
-        // Check if username already exists
         const [existingUsers] = await db.query(
-            'SELECT id FROM users WHERE username = ?',
+            'SELECT id FROM users WHERE username = $1',
             [username]
         );
 
@@ -115,16 +125,17 @@ exports.register = async (req, res) => {
             });
         }
 
-        // Insert new user with role 'jamaah'
+        // Hash password with bcrypt
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
         const [result] = await db.query(
-            'INSERT INTO users (username, password, full_name, role, rt) VALUES (?, ?, ?, ?, ?)',
-            [username, password, full_name, 'jamaah', no_hp || null]
+            'INSERT INTO users (username, password, full_name, role, rt) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+            [username, hashedPassword, full_name, 'jamaah', no_hp || null]
         );
 
-        // Log registration to audit
         await db.query(
-            'INSERT INTO audit_logs (user_id, action) VALUES (?, ?)',
-            [result.insertId || 0, `Register: ${username} (jamaah)`]
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [result[0]?.id || 1, `Register: ${username} (jamaah)`]
         );
 
         res.status(201).json({
@@ -146,10 +157,67 @@ exports.register = async (req, res) => {
  * POST /api/v1/auth/logout
  */
 exports.logout = async (req, res) => {
-    // In a stateless API, logout is typically handled on the frontend
-    // by removing the token. This endpoint can be used for logging purposes.
     res.json({
         success: true,
         message: 'Logout berhasil'
     });
+};
+
+/**
+ * Admin Reset Password for User
+ * POST /api/v1/auth/reset-password
+ */
+exports.resetPassword = async (req, res) => {
+    const { userId, newPassword } = req.body;
+
+    if (!userId || !newPassword) {
+        return res.status(400).json({
+            success: false,
+            message: 'User ID dan password baru harus diisi'
+        });
+    }
+
+    if (newPassword.length < 6) {
+        return res.status(400).json({
+            success: false,
+            message: 'Password minimal 6 karakter'
+        });
+    }
+
+    try {
+        // Check if user exists
+        const [users] = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+
+        if (users.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'User tidak ditemukan'
+            });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+        // Update password
+        await db.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, userId]);
+
+        // Log to audit
+        const userInfo = req.userInfo || {};
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [userInfo.id || 1, `Admin reset password for user ID ${userId} (${users[0].username})`]
+        );
+
+        res.json({
+            success: true,
+            message: `Password untuk ${users[0].username} berhasil direset`
+        });
+
+    } catch (err) {
+        console.error('Reset password error:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan pada server'
+        });
+    }
 };

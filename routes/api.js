@@ -21,6 +21,9 @@ router.post('/auth/login', authController.login);
 router.post('/auth/register', authController.register);
 router.post('/auth/logout', authController.logout);
 
+// Admin Reset Password
+router.post('/auth/reset-password', requireAdmin, authController.resetPassword);
+
 // ===== Dashboard Routes (Admin & Jamaah) =====
 router.get('/dashboard/stats', requireAdminOrJamaah, dashboardController.getStats);
 

@@ -585,134 +585,132 @@ exports.createEventRecipient = async (req, res) => {
     }
 
     try {
-        try {
-            // Check if event exists
-            const [eventRows] = await db.query('SELECT * FROM events WHERE id = $1', [id]);
+        // Check if event exists
+        const [eventRows] = await db.query('SELECT * FROM events WHERE id = $1', [id]);
 
-            if (eventRows.length === 0) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Event tidak ditemukan'
-                });
-            }
+        if (eventRows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event tidak ditemukan'
+            });
+        }
 
-            const [rows] = await db.query(
-                `INSERT INTO event_recipients (event_id, nama, alamat, no_hp, jenis_bantuan, jumlah, keterangan) 
+        const [rows] = await db.query(
+            `INSERT INTO event_recipients (event_id, nama, alamat, no_hp, jenis_bantuan, jumlah, keterangan) 
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                [id, nama, alamat || null, no_hp || null, jenis_bantuan || null, jumlah || null, keterangan || null]
-            );
+            [id, nama, alamat || null, no_hp || null, jenis_bantuan || null, jumlah || null, keterangan || null]
+        );
 
-            // Log to audit
-            const userInfo = req.userInfo || {};
-            await db.query(
-                'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
-                [userInfo.id || 1, `Menambah penerima "${nama}" ke event ${eventRows[0].nama}`]
-            );
+        // Log to audit
+        const userInfo = req.userInfo || {};
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [userInfo.id || 1, `Menambah penerima "${nama}" ke event ${eventRows[0].nama}`]
+        );
 
-            res.json({
-                success: true,
-                message: 'Penerima berhasil ditambahkan',
-                data: { id: rows[0].id }
-            });
+        res.json({
+            success: true,
+            message: 'Penerima berhasil ditambahkan',
+            data: { id: rows[0].id }
+        });
 
-        } catch (error) {
-            console.error('Create event recipient error:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message
-            });
-        }
-    };
+    } catch (error) {
+        console.error('Create event recipient error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
 
-    /**
-     * Update event recipient
-     * PUT /api/v1/events/:id/recipients/:recipientId
-     */
-    exports.updateEventRecipient = async (req, res) => {
-        const { id, recipientId } = req.params;
-        const { nama, alamat, no_hp, jenis_bantuan, jumlah, keterangan } = req.body;
+/**
+ * Update event recipient
+ * PUT /api/v1/events/:id/recipients/:recipientId
+ */
+exports.updateEventRecipient = async (req, res) => {
+    const { id, recipientId } = req.params;
+    const { nama, alamat, no_hp, jenis_bantuan, jumlah, keterangan } = req.body;
 
-        if (!nama) {
-            return res.status(400).json({
-                success: false,
-                message: 'Nama penerima harus diisi'
-            });
-        }
+    if (!nama) {
+        return res.status(400).json({
+            success: false,
+            message: 'Nama penerima harus diisi'
+        });
+    }
 
-        try {
-            const [rows, result] = await db.query(
-                `UPDATE event_recipients 
+    try {
+        const [rows, result] = await db.query(
+            `UPDATE event_recipients 
              SET nama = $1, alamat = $2, no_hp = $3, jenis_bantuan = $4, jumlah = $5, keterangan = $6
              WHERE id = $7 AND event_id = $8`,
-                [nama, alamat || null, no_hp || null, jenis_bantuan || null, jumlah || null, keterangan || null, recipientId, id]
-            );
+            [nama, alamat || null, no_hp || null, jenis_bantuan || null, jumlah || null, keterangan || null, recipientId, id]
+        );
 
-            if (result.rowCount === 0) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Penerima tidak ditemukan'
-                });
-            }
-
-            // Log to audit
-            const userInfo = req.userInfo || {};
-            await db.query(
-                'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
-                [userInfo.id || 1, `Mengupdate penerima ID ${recipientId}`]
-            );
-
-            res.json({
-                success: true,
-                message: 'Penerima berhasil diperbarui'
-            });
-
-        } catch (error) {
-            console.error('Update event recipient error:', error);
-            res.status(500).json({
+        if (result.rowCount === 0) {
+            return res.status(404).json({
                 success: false,
-                message: error.message
+                message: 'Penerima tidak ditemukan'
             });
         }
-    };
 
-    /**
-     * Delete event recipient
-     * DELETE /api/v1/events/:id/recipients/:recipientId
-     */
-    exports.deleteEventRecipient = async (req, res) => {
-        const { id, recipientId } = req.params;
+        // Log to audit
+        const userInfo = req.userInfo || {};
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [userInfo.id || 1, `Mengupdate penerima ID ${recipientId}`]
+        );
 
-        try {
-            const [rows, result] = await db.query(
-                'DELETE FROM event_recipients WHERE id = $1 AND event_id = $2',
-                [recipientId, id]
-            );
+        res.json({
+            success: true,
+            message: 'Penerima berhasil diperbarui'
+        });
 
-            if (result.rowCount === 0) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Penerima tidak ditemukan'
-                });
-            }
+    } catch (error) {
+        console.error('Update event recipient error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
 
-            // Log to audit
-            const userInfo = req.userInfo || {};
-            await db.query(
-                'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
-                [userInfo.id || 1, `Menghapus penerima ID ${recipientId}`]
-            );
+/**
+ * Delete event recipient
+ * DELETE /api/v1/events/:id/recipients/:recipientId
+ */
+exports.deleteEventRecipient = async (req, res) => {
+    const { id, recipientId } = req.params;
 
-            res.json({
-                success: true,
-                message: 'Penerima berhasil dihapus'
-            });
+    try {
+        const [rows, result] = await db.query(
+            'DELETE FROM event_recipients WHERE id = $1 AND event_id = $2',
+            [recipientId, id]
+        );
 
-        } catch (error) {
-            console.error('Delete event recipient error:', error);
-            res.status(500).json({
+        if (result.rowCount === 0) {
+            return res.status(404).json({
                 success: false,
-                message: error.message
+                message: 'Penerima tidak ditemukan'
             });
         }
-    };
 
+        // Log to audit
+        const userInfo = req.userInfo || {};
+        await db.query(
+            'INSERT INTO audit_logs (user_id, action) VALUES ($1, $2)',
+            [userInfo.id || 1, `Menghapus penerima ID ${recipientId}`]
+        );
+
+        res.json({
+            success: true,
+            message: 'Penerima berhasil dihapus'
+        });
+
+    } catch (error) {
+        console.error('Delete event recipient error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
